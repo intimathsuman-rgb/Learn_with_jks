@@ -20,29 +20,42 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Extract Android project
+      - name: Extract project archives
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
-          ZIP=$(find . -type f -name 'LearnWithJKS_GitHub_Upload.zip' -print -quit)
+          OUTER_ZIP=$(find . -type f -name 'LearnWithJKS_GitHub_Upload.zip' -print -quit)
+          test -n "$OUTER_ZIP"
 
-          if [ -z "$ZIP" ]; then
-            echo "Android project ZIP not found"
+          mkdir -p outer
+          unzip -q "$OUTER_ZIP" -d outer
+
+          INNER_ZIP=$(find outer -type f -name 'LearnWithJKS_Android_Project.zip' -print -quit)
+
+          if [ -z "$INNER_ZIP" ]; then
+            INNER_ZIP=$(find outer -type f -iname '*Android*Project*.zip' -print -quit || true)
+          fi
+
+          if [ -z "$INNER_ZIP" ]; then
+            echo "Inner Android project ZIP not found."
+            find outer -maxdepth 4 -type f -print | head -200
             exit 1
           fi
 
-          mkdir -p extracted
-          unzip -q "$ZIP" -d extracted
+          mkdir -p project
+          unzip -q "$INNER_ZIP" -d project
 
       - name: Find Android project
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
-          GRADLEW=$(find extracted -type f -name 'gradlew' -print -quit)
+          GRADLEW=$(find project -type f -name gradlew -print -quit)
 
           if [ -z "$GRADLEW" ]; then
-            echo "gradlew not found inside Android project"
-            find extracted -maxdepth 4 -type f | head -100
+            echo "gradlew not found."
+            find project -maxdepth 5 -type f -print | head -300
             exit 1
           fi
 
@@ -50,15 +63,15 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Build APK
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
           cd "$PROJECT_DIR"
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: LearnWithJKS-APK
-          path: |
-            **/build/outputs/apk/debug/*.apk
+          path: '**/app/build/outputs/apk/debug/*.apk'

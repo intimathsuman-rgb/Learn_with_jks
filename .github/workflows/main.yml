@@ -33,18 +33,18 @@ jobs:
           OUTER_ZIP=$(find . -type f -name 'LearnWithJKS_GitHub_Upload.zip' -print -quit)
           test -n "$OUTER_ZIP"
 
-          mkdir -p outer
+          rm -rf outer project
+          mkdir -p outer project
+
           unzip -q "$OUTER_ZIP" -d outer
 
-          INNER_ZIP=$(find outer -type f -name 'LearnWithJKS_Android_Project.zip' -print -quit)
+          INNER_ZIP=$(find outer -type f -name 'LearnWithJKS_Android_Project.zip' -print -quit || true)
 
           if [ -z "$INNER_ZIP" ]; then
             INNER_ZIP=$(find outer -type f -iname '*Android*Project*.zip' -print -quit || true)
           fi
 
           test -n "$INNER_ZIP"
-
-          mkdir -p project
           unzip -q "$INNER_ZIP" -d project
 
       - name: Find Android project
@@ -52,24 +52,17 @@ jobs:
         run: |
           set -euo pipefail
 
-          SETTINGS=$(find project -type f \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \) -print -quit || true)
+          SETTINGS=$(find project -type f \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \) -print -quit)
 
-          if [ -n "$SETTINGS" ]; then
-            PROJECT_DIR=$(dirname "$SETTINGS")
-          else
-            GRADLEW=$(find project -type f -name 'gradlew' -print -quit || true)
-
-            if [ -z "$GRADLEW" ]; then
-              echo "Android project files could not be located."
-              echo "Files found:"
-              find project -maxdepth 6 -type f | head -200
-              exit 1
-            fi
-
-            PROJECT_DIR=$(dirname "$GRADLEW")
+          if [ -z "$SETTINGS" ]; then
+            echo "Android settings file not found."
+            find project -maxdepth 8 -type f | sort | head -300
+            exit 1
           fi
 
+          PROJECT_DIR=$(dirname "$SETTINGS")
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
           echo "Android project: $PROJECT_DIR"
 
       - name: Fix FirebaseException import
@@ -77,21 +70,19 @@ jobs:
         run: |
           set -euo pipefail
 
-          MAIN_ACTIVITY=$(find "$PROJECT_DIR/app/src/main/java" \
-            -type f \
+          MAIN_ACTIVITY=$(find "$PROJECT_DIR" -type f \
+            -path '*/app/src/main/java/*' \
             -name 'MainActivity.java' \
             -print -quit || true)
 
           if [ -z "$MAIN_ACTIVITY" ]; then
-            echo "MainActivity.java not found"
-            exit 1
+            echo "MainActivity.java not found; skipping."
+            exit 0
           fi
 
           if ! grep -q 'import com.google.firebase.FirebaseException;' "$MAIN_ACTIVITY"; then
             sed -i '/^package /a import com.google.firebase.FirebaseException;' "$MAIN_ACTIVITY"
           fi
-
-          echo "FirebaseException import checked."
 
       - name: Build APK
         shell: bash
@@ -100,8 +91,7 @@ jobs:
 
           cd "$PROJECT_DIR"
 
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
+          if [ -x "./gradlew" ]; then
             ./gradlew clean :app:assembleDebug --no-daemon --stacktrace
           else
             gradle clean :app:assembleDebug --no-daemon --stacktrace

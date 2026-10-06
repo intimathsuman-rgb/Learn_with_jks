@@ -102,7 +102,10 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Android project: $PROJECT_DIR"
 
-      - name: Build APK
+      -       - name: Fix FirebaseException import
+        shell: bash
+        run: |
+          sed -i '/^package com.learnwithjks.app;/a import com.google.firebase.FirebaseException;' "$PROJECT_DIR/app/src/main/java/com/learnwithjks/app/MainActivity.java"name: Build APK
         shell: bash
         run: |
           set -euo pipefail

@@ -25,18 +25,43 @@ jobs:
         with:
           gradle-version: '8.7'
 
+      - name: Configure Android SDK
+        shell: bash
+        run: |
+          set -e
+
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+
+          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "sdkmanager found."
+          else
+            echo "sdkmanager not found at:"
+            find "$ANDROID_HOME" -name sdkmanager -type f -print | head -20
+            exit 1
+          fi
+
       - name: Accept Android SDK licenses
         shell: bash
         run: |
-          yes | sdkmanager --licenses || true
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
 
       - name: Install Android SDK packages
         shell: bash
         run: |
-          sdkmanager "platform-tools"
-          sdkmanager "platforms;android-34"
-          sdkmanager "platforms;android-35"
-          sdkmanager "build-tools;35.0.0"
+          set -e
+
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" \
+            "platforms;android-34" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
       - name: Extract Android project
         shell: bash
@@ -73,14 +98,20 @@ jobs:
           test -n "$SETTINGS"
 
           PROJECT_DIR=$(dirname "$SETTINGS")
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Android project: $PROJECT_DIR"
 
       - name: Build APK
         shell: bash
         run: |
           set -euo pipefail
+
           cd "$PROJECT_DIR"
-          gradle clean :app:assembleDebug --no-daemon --stacktrace
+
+          gradle clean :app:assembleDebug \
+            --no-daemon \
+            --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

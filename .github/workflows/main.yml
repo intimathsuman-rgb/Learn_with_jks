@@ -20,6 +20,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
       - name: Extract project archives
         shell: bash
         run: |
@@ -32,16 +37,7 @@ jobs:
           unzip -q "$OUTER_ZIP" -d outer
 
           INNER_ZIP=$(find outer -type f -name 'LearnWithJKS_Android_Project.zip' -print -quit)
-
-          if [ -z "$INNER_ZIP" ]; then
-            INNER_ZIP=$(find outer -type f -iname '*Android*Project*.zip' -print -quit || true)
-          fi
-
-          if [ -z "$INNER_ZIP" ]; then
-            echo "Inner Android project ZIP not found."
-            find outer -maxdepth 4 -type f -print | head -200
-            exit 1
-          fi
+          test -n "$INNER_ZIP"
 
           mkdir -p project
           unzip -q "$INNER_ZIP" -d project
@@ -50,25 +46,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          GRADLEW=$(find project -type f -name gradlew -print -quit)
-
-          if [ -z "$GRADLEW" ]; then
-            echo "gradlew not found."
-            find project -maxdepth 5 -type f -print | head -300
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$GRADLEW")
+          PROJECT_DIR=$(find project -type f -name 'settings.gradle' -print -quit | xargs dirname)
+          test -n "$PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Android project: $PROJECT_DIR"
 
       - name: Build APK
         shell: bash
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          gradle assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

@@ -20,66 +20,22 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle 8.7
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.7'
-
-      - name: Configure Android SDK
-        shell: bash
-        run: |
-          set -e
-
-          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          export ANDROID_SDK_ROOT="$ANDROID_HOME"
-
-          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
-
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
-
-          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
-            echo "sdkmanager found."
-          else
-            echo "sdkmanager not found at:"
-            find "$ANDROID_HOME" -name sdkmanager -type f -print | head -20
-            exit 1
-          fi
-
-      - name: Accept Android SDK licenses
-        shell: bash
-        run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
-
-      - name: Install Android SDK packages
-        shell: bash
-        run: |
-          set -e
-
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-            "platform-tools" \
-            "platforms;android-34" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
-      - name: Extract Android project
+      - name: Extract project archives
         shell: bash
         run: |
           set -euo pipefail
 
-          OUTER_ZIP=$(find . -type f \
-            -name 'LearnWithJKS_GitHub_Upload.zip' \
-            -print -quit)
-
+          OUTER_ZIP=$(find . -type f -name 'LearnWithJKS_GitHub_Upload.zip' -print -quit)
           test -n "$OUTER_ZIP"
 
           mkdir -p outer
           unzip -q "$OUTER_ZIP" -d outer
 
-          INNER_ZIP=$(find outer -type f \
-            -name 'LearnWithJKS_Android_Project.zip' \
-            -print -quit)
+          INNER_ZIP=$(find outer -type f -name 'LearnWithJKS_Android_Project.zip' -print -quit)
+
+          if [ -z "$INNER_ZIP" ]; then
+            INNER_ZIP=$(find outer -type f -iname '*Android*Project*.zip' -print -quit || true)
+          fi
 
           test -n "$INNER_ZIP"
 
@@ -91,34 +47,32 @@ jobs:
         run: |
           set -euo pipefail
 
-          SETTINGS=$(find project -type f \
-            -name 'settings.gradle' \
-            -print -quit)
+          GRADLEW=$(find project -type f -name gradlew -print -quit)
+          test -n "$GRADLEW"
 
-          test -n "$SETTINGS"
-
-          PROJECT_DIR=$(dirname "$SETTINGS")
-
+          PROJECT_DIR=$(dirname "$GRADLEW")
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Android project: $PROJECT_DIR"
 
-      -       - name: Fix FirebaseException import
+      - name: Fix FirebaseException import
         shell: bash
         run: |
-          sed -i '/^package com.learnwithjks.app;/a import com.google.firebase.FirebaseException;' "$PROJECT_DIR/app/src/main/java/com/learnwithjks/app/MainActivity.java"name: Build APK
+          set -euo pipefail
+
+          MAIN_ACTIVITY="$PROJECT_DIR/app/src/main/java/com/learnwithjks/app/MainActivity.java"
+
+          sed -i '/^package com.learnwithjks.app;/a import com.google.firebase.FirebaseException;' "$MAIN_ACTIVITY"
+
+      - name: Build APK
         shell: bash
         run: |
           set -euo pipefail
 
           cd "$PROJECT_DIR"
-
-          gradle clean :app:assembleDebug \
-            --no-daemon \
-            --stacktrace
+          chmod +x gradlew
+          ./gradlew clean :app:assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: LearnWithJKS-APK
           path: '**/app/build/outputs/apk/debug/*.apk'
-          if-no-files-found: error

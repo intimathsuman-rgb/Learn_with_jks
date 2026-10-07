@@ -11,8 +11,10 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
+
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -20,12 +22,14 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Extract Learn With JKS v21
+
+      - name: Extract Learn With JKS project
         shell: bash
         run: |
           set -euo pipefail
@@ -45,29 +49,34 @@ jobs:
 
           echo "Project files verified."
 
-      - name: Fix and verify MainActivity
+
+      - name: Verify Firebase exception import
         shell: bash
         run: |
           set -euo pipefail
 
-          FILE="project/app/src/main/java/com/learnwithjks/app/MainActivity.java"
+          ! grep -q 'com.google.firebase.auth.FirebaseTooManyRequestsException' \
+            project/app/src/main/java/com/learnwithjks/app/MainActivity.java
 
-          # Correct Firebase exception import
-          sed -i 's/import com\.google\.firebase\.auth\.FirebaseTooManyRequestsException;/import com.google.firebase.FirebaseTooManyRequestsException;/' "$FILE"
+          grep -q 'com.google.firebase.FirebaseTooManyRequestsException' \
+            project/app/src/main/java/com/learnwithjks/app/MainActivity.java
 
-          # Correct PhoneAuth timeout type
-          sed -i 's/setTimeout(60, *TimeUnit\.SECONDS)/setTimeout(60L, TimeUnit.SECONDS)/g' "$FILE"
+          echo "Correct Firebase exception import verified."
 
-          # Make sure old/wrong import is gone
-          ! grep -q 'com.google.firebase.auth.FirebaseTooManyRequestsException' "$FILE"
 
-          # Make sure correct import exists
-          grep -q 'com.google.firebase.FirebaseTooManyRequestsException' "$FILE"
+      - name: Fix Firebase timeout type
+        shell: bash
+        run: |
+          set -euo pipefail
 
-          # Make sure timeout uses Long
-          grep -q 'setTimeout(60L, TimeUnit.SECONDS)' "$FILE"
+          sed -i 's/\.setTimeout(60, TimeUnit\.SECONDS)/.setTimeout(60L, TimeUnit.SECONDS)/g' \
+            project/app/src/main/java/com/learnwithjks/app/MainActivity.java
 
-          echo "MainActivity fixes verified."
+          grep -q '.setTimeout(60L, TimeUnit.SECONDS)' \
+            project/app/src/main/java/com/learnwithjks/app/MainActivity.java
+
+          echo "Firebase timeout type verified."
+
 
       - name: Build APK
         shell: bash
@@ -78,6 +87,7 @@ jobs:
 
           gradle clean :app:assembleDebug --stacktrace
 
+
       - name: Verify APK
         shell: bash
         run: |
@@ -85,9 +95,30 @@ jobs:
 
           test -f project/app/build/outputs/apk/debug/app-debug.apk
 
-          echo "================================="
           echo "APK BUILD SUCCESSFUL"
-          echo "================================="
+
+
+      - name: Get APK SHA fingerprints
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APK="project/app/build/outputs/apk/debug/app-debug.apk"
+
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" \
+            -name apksigner \
+            -type f | sort -V | tail -n 1)
+
+          test -f "$APKSIGNER"
+
+          echo "======================================"
+          echo "LEARN WITH JKS APK FINGERPRINTS"
+          echo "======================================"
+
+          "$APKSIGNER" verify --print-certs "$APK"
+
+          echo "======================================"
+
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

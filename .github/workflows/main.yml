@@ -56,6 +56,19 @@ jobs:
 
           echo "Correct Firebase exception import verified."
 
+      - name: Fix Firebase timeout type
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sed -i 's/\.setTimeout(60, TimeUnit\.SECONDS)/.setTimeout(60L, TimeUnit.SECONDS)/g' \
+            project/app/src/main/java/com/learnwithjks/app/MainActivity.java
+
+          grep -q '.setTimeout(60L, TimeUnit.SECONDS)' \
+            project/app/src/main/java/com/learnwithjks/app/MainActivity.java
+
+          echo "Firebase timeout type fixed."
+
       - name: Build APK
         shell: bash
         run: |

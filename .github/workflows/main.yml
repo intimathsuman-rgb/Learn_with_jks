@@ -38,11 +38,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          FILE="project/app/src/main/java/com/learnwithjks/app/MainActivity.java"
+                    FILE="project/app/src/main/java/com/learnwithjks/app/MainActivity.java"
 
-          sed -i 's/FirebaseTooManyRequestsException/com.google.firebase.FirebaseTooManyRequestsException/g' "$FILE"
+          sed -i 's#import com.google.firebase.auth.FirebaseTooManyRequestsException;#import com.google.firebase.FirebaseTooManyRequestsException;#' "$FILE"
 
-          sed -i -E 's/\.setTimeout\(60[[:space:]]*,[[:space:]]*TimeUnit\.SECONDS\)/.setTimeout(60L, TimeUnit.SECONDS)/g' "$FILE"
+          sed -i -E 's/\.setTimeout\(60([[:space:]]*),[[:space:]]*TimeUnit\.SECONDS\)/.setTimeout(60L\1, TimeUnit.SECONDS)/g' "$FILE"
 
           echo "Source fixes applied."
 

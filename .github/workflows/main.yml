@@ -1,9 +1,10 @@
-name: Build Learn With JKS
+name: Build Learn With JKS APK
 
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   build:
@@ -24,26 +25,46 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Extract ONLY the new project
+      - name: Extract Firebase OTP project
+        shell: bash
         run: |
+          set -euo pipefail
+
           rm -rf project
-          unzi p -LearnWithJKS_FIREBASE_OTP.zip
+
+          test -f LearnWithJKS_FIREBASE_OTP.zip
+
+          unzip -q LearnWithJKS_FIREBASE_OTP.zip -d project
 
           test -f project/settings.gradle
+          test -f project/build.gradle
           test -f project/app/build.gradle
+          test -f project/app/google-services.json
           test -f project/app/src/main/AndroidManifest.xml
 
-          echo "NEW PROJECT VERIFIED"
-          grep -R "App successfully started" project/app/src/main || true
+          echo "FIREBASE OTP PROJECT VERIFIED"
 
       - name: Build APK
+        shell: bash
         run: |
+          set -euo pipefail
+
           cd project
+
           gradle clean assembleDebug --stacktrace
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f project/app/build/outputs/apk/debug/app-debug.apk
+
+          echo "APK BUILD SUCCESSFUL"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: LearnWithJKS-FINAL-APK
+          name: LearnWithJKS-Firebase-OTP-APK
           path: project/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

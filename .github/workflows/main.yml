@@ -1,21 +1,20 @@
-name: Build Learn With JKS APK
+name: Build Learn With JKS
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Java 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
@@ -23,82 +22,28 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.7'
+          gradle-version: '8.9'
 
-      - name: Extract project archives
-        shell: bash
+      - name: Extract ONLY the new project
         run: |
-          set -euo pipefail
+          rm -rf project
+          unzip -q LearnWithJKS_DIRECT_BUILD.zip -d project
 
-          OUTER_ZIP=$(find . -type f -name 'LearnWithJKS_GitHub_Upload.zip' -print -quit)
-          test -n "$OUTER_ZIP"
+          test -f project/settings.gradle
+          test -f project/app/build.gradle
+          test -f project/app/src/main/AndroidManifest.xml
 
-          rm -rf outer project
-          mkdir -p outer project
-
-          unzip -q "$OUTER_ZIP" -d outer
-
-          INNER_ZIP=$(find outer -type f -name 'LearnWithJKS_Android_Project.zip' -print -quit || true)
-
-          if [ -z "$INNER_ZIP" ]; then
-            INNER_ZIP=$(find outer -type f -iname '*Android*Project*.zip' -print -quit || true)
-          fi
-
-          test -n "$INNER_ZIP"
-          unzip -q "$INNER_ZIP" -d project
-
-      - name: Find Android project
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          SETTINGS=$(find project -type f \( -name 'settings.gradle' -o -name 'settings.gradle.kts' \) -print -quit)
-
-          if [ -z "$SETTINGS" ]; then
-            echo "Android settings file not found."
-            find project -maxdepth 8 -type f | sort | head -300
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$SETTINGS")
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-
-          echo "Android project: $PROJECT_DIR"
-
-      - name: Fix FirebaseException import
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          MAIN_ACTIVITY=$(find "$PROJECT_DIR" -type f \
-            -path '*/app/src/main/java/*' \
-            -name 'MainActivity.java' \
-            -print -quit || true)
-
-          if [ -z "$MAIN_ACTIVITY" ]; then
-            echo "MainActivity.java not found; skipping."
-            exit 0
-          fi
-
-          if ! grep -q 'import com.google.firebase.FirebaseException;' "$MAIN_ACTIVITY"; then
-            sed -i '/^package /a import com.google.firebase.FirebaseException;' "$MAIN_ACTIVITY"
-          fi
+          echo "NEW PROJECT VERIFIED"
+          grep -R "App successfully started" project/app/src/main || true
 
       - name: Build APK
-        shell: bash
         run: |
-          set -euo pipefail
-
-          cd "$PROJECT_DIR"
-
-          if [ -x "./gradlew" ]; then
-            ./gradlew clean :app:assembleDebug --no-daemon --stacktrace
-          else
-            gradle clean :app:assembleDebug --no-daemon --stacktrace
-          fi
+          cd project
+          gradle clean assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: LearnWithJKS-APK
-          path: '**/app/build/outputs/apk/debug/*.apk'
+          name: LearnWithJKS-FINAL-APK
+          path: project/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

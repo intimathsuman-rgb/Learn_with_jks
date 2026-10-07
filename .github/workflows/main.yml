@@ -27,7 +27,7 @@ jobs:
       - name: Extract ONLY the new project
         run: |
           rm -rf project
-          unzip -q LearnWithJKS_DIRECT_BUILD.zip -d project
+          unzi p -LearnWithJKS_FIREBASE_OTP.zip
 
           test -f project/settings.gradle
           test -f project/app/build.gradle

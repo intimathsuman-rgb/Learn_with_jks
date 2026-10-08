@@ -14,68 +14,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
-      - name: Set up Gradle
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
-
-      - name: Extract project
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf project
-          test -f LearnWithJKS_GITHUB_READY_v21.zip
-          unzip -q LearnWithJKS_GITHUB_READY_v21.zip -d project
-
-      - name: Fix source compatibility
-        shell: bash
-        run: |
-          set -euo pipefail
-
-                    FILE="project/app/src/main/java/com/learnwithjks/app/MainActivity.java"
-
-          sed -i 's#import com.google.firebase.auth.FirebaseTooManyRequestsException;#import com.google.firebase.FirebaseTooManyRequestsException;#' "$FILE"
-
-          sed -i -E 's/\.setTimeout\(60([[:space:]]*),[[:space:]]*TimeUnit\.SECONDS\)/.setTimeout(60L\1, TimeUnit.SECONDS)/g' "$FILE"
-
-          echo "Source fixes applied."
+          gradle-version: "8.9"
 
       - name: Build APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd project
-          gradle clean :app:assembleDebug --stacktrace
-
-      - name: Verify APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f project/app/build/outputs/apk/debug/app-debug.apk
-          echo "APK BUILD SUCCESSFUL"
-
-      - name: Get APK SHA fingerprints
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          APK="project/app/build/outputs/apk/debug/app-debug.apk"
-
-          APKSIGNER=$(find "$ANDROID_HOME/build-tools" \
-            -name apksigner \
-            -type f | sort -V | tail -n 1)
-
-          "$APKSIGNER" verify --print-certs "$APK"
+        run: gradle clean :app:assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: LearnWithJKS-FINAL-APK
-          path: project/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          name: Learn-With-JKS-APK
+          path: app/build/outputs/apk/debug/app-debug.apk

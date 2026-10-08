@@ -11,57 +11,79 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout
+      - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Setup Java
+      - name: Setup Java JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: "17"
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle' # बिल्ड को फ़ास्ट करने के लिए कैशिंग ऑन की गई है
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
 
-      - name: Extract Android project
+      - name: Extract Android Project ZIP
         run: |
           mkdir -p android-project
-          unzip -q "LearnWithJKS_FIREBASE_OTP.zip" -d android-project
+          if [ -f "LearnWithJKS_FIREBASE_OTP.zip" ]; then
+            unzip -q "LearnWithJKS_FIREBASE_OTP.zip" -d android-project
+          else
+            echo "Error: LearnWithJKS_FIREBASE_OTP.zip not found in root repository!"
+            exit 1
+          fi
 
-      - name: Find Gradle project
+      - name: Find Gradle Root Directory
         id: findroot
         shell: bash
         run: |
           ROOT_FILE=$(find "$GITHUB_WORKSPACE/android-project" -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit)
 
           if [ -z "$ROOT_FILE" ]; then
-            echo "Gradle project not found"
+            echo "Gradle project structure not found!"
             exit 1
           fi
 
           ROOT=$(dirname "$ROOT_FILE")
           echo "Gradle project found at: $ROOT"
           echo "root=$ROOT" >> "$GITHUB_OUTPUT"
-      - name: Fix Firebase Java error
+
+      - name: Fix Firebase Code & Permissions
         run: |
           FILE=$(find "$GITHUB_WORKSPACE/android-project" -type f -name "MainActivity.java" -print -quit)
 
           if [ -z "$FILE" ]; then
-            echo "MainActivity.java not found"
-            exit 1
+            echo "Warning: MainActivity.java not found, skipping patch."
+          else
+            # Firebase Exception और Timeout एरर को फिक्स करना
+            sed -i '/FirebaseTooManyRequestsException/d' "$FILE"
+            sed -i 's/setTimeout(60, TimeUnit.SECONDS)/setTimeout(60L, TimeUnit.SECONDS)/g' "$FILE"
+          fi
+          
+          # Gradle Wrapper को रन करने की परमिशन देना
+          cd "${{ steps.findroot.outputs.root }}"
+          if [ -f "gradlew" ]; then
+            chmod +x gradlew
           fi
 
-          sed -i '/FirebaseTooManyRequestsException/d' "$FILE"
-          sed -i 's/setTimeout(60, TimeUnit.SECONDS)/setTimeout(60L, TimeUnit.SECONDS)/g' "$FILE"
-      - name: Build APK
+      - name: Build Debug APK
         working-directory: ${{ steps.findroot.outputs.root }}
         run: |
-          gradle clean :app:assembleDebug --stacktrace
+          # ग्लोबल 'gradle' के बजाय प्रोजेक्ट के './gradlew' का उपयोग करना ज्यादा सेफ होता है
+          if [ -f "./gradlew" ]; then
+            ./gradlew clean assembleDebug --stacktrace
+          else
+            gradle clean :app:assembleDebug --stacktrace
+          fi
 
-      - name: Upload APK
+      - name: Upload Generated APK
         uses: actions/upload-artifact@v4
         with:
           name: Learn-With-JKS-APK
-          path: ${{ steps.findroot.outputs.root }}/app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            ${{ steps.findroot.outputs.root }}/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          

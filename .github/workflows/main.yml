@@ -44,7 +44,17 @@ jobs:
           ROOT=$(dirname "$ROOT_FILE")
           echo "Gradle project found at: $ROOT"
           echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+      - name: Fix Firebase Java error
+        run: |
+          FILE=$(find "$GITHUB_WORKSPACE/android-project" -type f -name "MainActivity.java" -print -quit)
 
+          if [ -z "$FILE" ]; then
+            echo "MainActivity.java not found"
+            exit 1
+          fi
+
+          sed -i '/FirebaseTooManyRequestsException/d' "$FILE"
+          sed -i 's/setTimeout(60, TimeUnit.SECONDS)/setTimeout(60L, TimeUnit.SECONDS)/g' "$FILE"
       - name: Build APK
         working-directory: ${{ steps.findroot.outputs.root }}
         run: |

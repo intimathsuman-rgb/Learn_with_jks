@@ -43,22 +43,18 @@ jobs:
 
           echo "Gradle project found at: $ROOT"
           echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+            - name: Fix Firebase Java errors
+              run: |
+                FILE=$(find "$GITHUB_WORKSPACE/android-project" -type f -name "MainActivity.java" -print -quit)
 
-      - name: Fix Firebase Java errors
-        run: |
-          FILE=$(find "$GITHUB_WORKSPACE/android-project" -type f -name "MainActivity.java" -print -quit)
+                if [ -z "$FILE" ]; then
+                  echo "MainActivity.java not found"
+                  exit 1
+                fi
 
-          if [ -z "$FILE" ]; then
-            echo "MainActivity.java not found"
-            exit 1
-          fi
+                sed -i 's/import com.google.firebase.auth.FirebaseTooManyRequestsException;/import com.google.firebase.FirebaseTooManyRequestsException;/' "$FILE"
 
-          sed -i 's/setTimeout(60, TimeUnit.SECONDS)/setTimeout(60L, TimeUnit.SECONDS)/g' "$FILE"
-
-          sed -i '/import com.google.firebase.auth.FirebaseTooManyRequestsException;/d' "$FILE"
-
-          sed -i '/instanceof FirebaseTooManyRequestsException/d' "$FILE"
-
+                sed -i 's/setTimeout(60, TimeUnit.SECONDS)/setTimeout(60L, TimeUnit.SECONDS)/g' "$FILE"
       - name: Build APK
         working-directory: ${{ steps.findroot.outputs.root }}
         run: gradle clean :app:assembleDebug --stacktrace

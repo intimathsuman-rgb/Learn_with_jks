@@ -30,19 +30,20 @@ jobs:
           mkdir -p android-project
           unzip -q "LearnWithJKS_FIREBASE_OTP.zip" -d android-project
 
-      - name: Find Gradle project
-        id: findroot
-        shell: bash
-        run: |
-          ROOT=$(find "$GITHUB_WORKSPACE/android-project" -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit | xargs -r dirname)
+                  - name: Find Gradle project
+              id: findroot
+              shell: bash
+              run: |
+                ROOT_FILE=$(find "$GITHUB_WORKSPACE/android-project" -type f -name "settings.gradle" -print -quit)
 
-          if [ -z "$ROOT" ]; then
-            echo "Gradle project not found"
-            exit 1
-          fi
+                if [ -z "$ROOT_FILE" ]; then
+                  echo "Gradle project not found"
+                  exit 1
+                fi
 
-          echo "Gradle project found at: $ROOT"
-          echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+                ROOT=$(dirname "$ROOT_FILE")
+                echo "Gradle project found at: $ROOT"
+                echo "root=$ROOT" >> "$GITHUB_OUTPUT"
             - name: Fix Firebase Java errors
               run: |
                 FILE=$(find "$GITHUB_WORKSPACE/android-project" -type f -name "MainActivity.java" -print -quit)

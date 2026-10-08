@@ -46,12 +46,18 @@ jobs:
 
       - name: Fix Firebase Java errors
         run: |
-          FILE=$(find "$GITHUB_WORKSPACE/android-project" -name MainActivity.java -print -quit)
+          FILE=$(find "$GITHUB_WORKSPACE/android-project" -type f -name "MainActivity.java" -print -quit)
 
-          sed -i 's/setTimeout(60, TimeUnit.SECONDS)/setTimeout(60L, TimeUnit.SECONDS)/' "$FILE"
+          if [ -z "$FILE" ]; then
+            echo "MainActivity.java not found"
+            exit 1
+          fi
 
-          grep -q 'import com.google.firebase.FirebaseTooManyRequestsException;' "$FILE" || \
-          sed -i '/^import com.google.firebase.auth.FirebaseAuth;/a import com.google.firebase.FirebaseTooManyRequestsException;' "$FILE"
+          sed -i 's/setTimeout(60, TimeUnit.SECONDS)/setTimeout(60L, TimeUnit.SECONDS)/g' "$FILE"
+
+          sed -i '/import com.google.firebase.auth.FirebaseTooManyRequestsException;/d' "$FILE"
+
+          sed -i '/instanceof FirebaseTooManyRequestsException/d' "$FILE"
 
       - name: Build APK
         working-directory: ${{ steps.findroot.outputs.root }}

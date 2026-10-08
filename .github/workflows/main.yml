@@ -30,35 +30,25 @@ jobs:
           mkdir -p android-project
           unzip -q "LearnWithJKS_FIREBASE_OTP.zip" -d android-project
 
-                  - name: Find Gradle project
-              id: findroot
-              shell: bash
-              run: |
-                ROOT_FILE=$(find "$GITHUB_WORKSPACE/android-project" -type f -name "settings.gradle" -print -quit)
+      - name: Find Gradle project
+        id: findroot
+        shell: bash
+        run: |
+          ROOT_FILE=$(find "$GITHUB_WORKSPACE/android-project" -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit)
 
-                if [ -z "$ROOT_FILE" ]; then
-                  echo "Gradle project not found"
-                  exit 1
-                fi
+          if [ -z "$ROOT_FILE" ]; then
+            echo "Gradle project not found"
+            exit 1
+          fi
 
-                ROOT=$(dirname "$ROOT_FILE")
-                echo "Gradle project found at: $ROOT"
-                echo "root=$ROOT" >> "$GITHUB_OUTPUT"
-            - name: Fix Firebase Java errors
-              run: |
-                FILE=$(find "$GITHUB_WORKSPACE/android-project" -type f -name "MainActivity.java" -print -quit)
+          ROOT=$(dirname "$ROOT_FILE")
+          echo "Gradle project found at: $ROOT"
+          echo "root=$ROOT" >> "$GITHUB_OUTPUT"
 
-                if [ -z "$FILE" ]; then
-                  echo "MainActivity.java not found"
-                  exit 1
-                fi
-
-                sed -i 's/import com.google.firebase.auth.FirebaseTooManyRequestsException;/import com.google.firebase.FirebaseTooManyRequestsException;/' "$FILE"
-
-                sed -i 's/setTimeout(60, TimeUnit.SECONDS)/setTimeout(60L, TimeUnit.SECONDS)/g' "$FILE"
       - name: Build APK
         working-directory: ${{ steps.findroot.outputs.root }}
-        run: gradle clean :app:assembleDebug --stacktrace
+        run: |
+          gradle clean :app:assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

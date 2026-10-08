@@ -28,7 +28,7 @@ jobs:
       - name: Extract Android project
         run: |
           mkdir -p android-project
-          unzip -q "LearnWithJKS_NEW_APP.zip" -d android-project
+          unzip -q "LearnWithJKS_FIREBASE_OTP.zip" -d android-project
 
       - name: Find Gradle project
         id: findroot
@@ -43,6 +43,15 @@ jobs:
 
           echo "Gradle project found at: $ROOT"
           echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+
+      - name: Fix Firebase Java errors
+        run: |
+          FILE=$(find "$GITHUB_WORKSPACE/android-project" -name MainActivity.java -print -quit)
+
+          sed -i 's/setTimeout(60, TimeUnit.SECONDS)/setTimeout(60L, TimeUnit.SECONDS)/' "$FILE"
+
+          grep -q 'import com.google.firebase.FirebaseTooManyRequestsException;' "$FILE" || \
+          sed -i '/^import com.google.firebase.auth.FirebaseAuth;/a import com.google.firebase.FirebaseTooManyRequestsException;' "$FILE"
 
       - name: Build APK
         working-directory: ${{ steps.findroot.outputs.root }}

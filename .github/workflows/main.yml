@@ -28,7 +28,7 @@ jobs:
       - name: Extract Android project
         run: |
           mkdir -p android-project
-          unzip -q "LearnWithJKS_Android_Project_STABLE_FINAL.zip" -d android-project
+          unzip -q "LearnWithJKS_NEW_APP.zip" -d android-project
 
       - name: Find Gradle project
         id: findroot

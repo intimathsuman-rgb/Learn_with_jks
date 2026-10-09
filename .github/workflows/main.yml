@@ -17,39 +17,73 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Find and Extract Android ZIP
-        shell: bash
-        run: |
-          ZIP_FILE=$(find . -maxdepth 1 -type f \
-            -iname '*500*STUDENTS*COMPLETE*.zip' \
-            | head -n 1)
-
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: Complete Android ZIP not found."
-            find . -maxdepth 1 -type f
-            exit 1
-          fi
-
-          mkdir -p android_project
-          unzip -q "$ZIP_FILE" -d android_project
-
-          PROJECT_DIR=$(find android_project \
-            -name settings.gradle -type f \
-            -printf '%h\n' | head -n 1)
-
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: settings.gradle not found after extraction."
-            exit 1
-          fi
-
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Android project found: $PROJECT_DIR"
-
       - name: Set Up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
+      - name: Find Android Project
+        shell: bash
+        run: |
+          set -e
+
+          echo "Searching for Android project ZIP files..."
+
+          mkdir -p "$RUNNER_TEMP/android_project"
+
+          PROJECT_ZIP=""
+
+          while IFS= read -r -d '' FILE; do
+            if unzip -Z1 "$FILE" 2>/dev/null |
+              grep -Eq '(^|/)settings\.gradle(\.kts)?$'; then
+              PROJECT_ZIP="$FILE"
+              break
+            fi
+          done < <(
+            find . -maxdepth 3 -type f \
+              \( -iname '*.zip' -o -iname '*.ZIP' \) \
+              -print0
+          )
+
+          if [ -z "$PROJECT_ZIP" ]; then
+            echo "ERROR: No ZIP containing settings.gradle was found."
+            echo "Please check the Android project ZIP file."
+            exit 1
+          fi
+
+          echo "Android ZIP found: $PROJECT_ZIP"
+
+          unzip -q "$PROJECT_ZIP" \
+            -d "$RUNNER_TEMP/android_project"
+
+          PROJECT_DIR=""
+
+          while IFS= read -r -d '' FILE; do
+            DIR="$(dirname "$FILE")"
+
+            if [ -f "$DIR/app/build.gradle" ] ||
+               [ -f "$DIR/app/build.gradle.kts" ]; then
+              PROJECT_DIR="$DIR"
+              break
+            fi
+          done < <(
+            find "$RUNNER_TEMP/android_project" \
+              -type f \
+              \( -name settings.gradle \
+              -o -name settings.gradle.kts \) \
+              -print0
+          )
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: Android app module was not found."
+            exit 1
+          fi
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+          echo "Android project directory: $PROJECT_DIR"
+          ls -la "$PROJECT_DIR"
 
       - name: Set Up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -59,12 +93,20 @@ jobs:
       - name: Build Debug APK
         shell: bash
         run: |
+          set -e
           cd "$PROJECT_DIR"
-          gradle clean :app:assembleDebug --stacktrace
+
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew --no-daemon clean :app:assembleDebug
+          else
+            gradle --no-daemon clean :app:assembleDebug
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Learn-With-JKS-APK
-          path: android_project/**/app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+          retention-days: 7

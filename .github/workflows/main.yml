@@ -6,94 +6,85 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   build:
+    name: Build Android APK
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout Source Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Java JDK 17
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+      - name: Show Repository Files
+        run: |
+          echo "Repository files:"
+          ls -la
+          echo "Searching for Android project..."
+          find . -maxdepth 5 -type f \
+            \( -name settings.gradle \
+            -o -name settings.gradle.kts \) -print
 
-      - name: Setup Gradle
+      - name: Find Android Project
+        id: project
+        shell: bash
+        run: |
+          PROJECT_DIR=""
+          while IFS= read -r file; do
+            dir="${file%/*}"
+            if [ -f "$dir/gradlew" ] || \
+               [ -f "$dir/build.gradle" ] || \
+               [ -f "$dir/build.gradle.kts" ]; then
+              PROJECT_DIR="$dir"
+              break
+            fi
+          done < <(
+            find . -maxdepth 5 -type f \
+              \( -name settings.gradle \
+              -o -name settings.gradle.kts \)
+          )
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: Android Gradle project not found."
+            echo "The repository must contain an Android project."
+            exit 1
+          fi
+
+          echo "Project directory: $PROJECT_DIR"
+          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Set Up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set Up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
 
-      - name: Extract Android Project ZIP
-        run: |
-          mkdir -p android-project
-          if [ -f "LearnWithJKS_FIREBASE_OTP.zip" ]; then
-            unzip -q "LearnWithJKS_FIREBASE_OTP.zip" -d android-project
-          else
-            echo "Error: LearnWithJKS_FIREBASE_OTP.zip not found!"
-            exit 1
-          fi
-
-      - name: Find Gradle Root Directory
-        id: findroot
+      - name: Build Debug APK
         shell: bash
         run: |
-          ROOT_FILE=$(find "$GITHUB_WORKSPACE/android-project" -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit)
+          PROJECT_DIR="${{ steps.project.outputs.project_dir }}"
+          cd "$PROJECT_DIR"
 
-          if [ -z "$ROOT_FILE" ]; then
-            echo "Gradle project structure not found!"
-            exit 1
-          fi
-
-          ROOT=$(dirname "$ROOT_FILE")
-          echo "root=$ROOT" >> "$GITHUB_OUTPUT"
-
-      - name: Patch Firebase Code & Create Mock Config
-        run: |
-          # 1. MainActivity में जावा कोड की त्रुटियां ठीक करना
-          FILE=$(find "$GITHUB_WORKSPACE/android-project" -type f -name "MainActivity.java" -print -quit)
-          if [ -z "$FILE" ]; then
-            echo "Warning: MainActivity.java not found."
-          else
-            sed -i '/FirebaseTooManyRequestsException/d' "$FILE"
-            sed -i 's/setTimeout(60, TimeUnit.SECONDS)/setTimeout(60L, TimeUnit.SECONDS)/g' "$FILE"
-          fi
-          
-          # 2. अगर google-services.json फ़ाइल नहीं है, तो डमी फ़ाइल बनाना ताकि प्लगइन क्रैश न हो
-          APP_DIR=$(find "$GITHUB_WORKSPACE/android-project" -type d -name "app" -print -quit)
-          if [ -d "$APP_DIR" ]; then
-            if [ ! -f "$APP_DIR/google-services.json" ]; then
-              echo "Creating missing dummy google-services.json"
-              echo '{"project_info":{"project_number":"123","project_id":"mock"},"client":[{"client_info":{"mobilesdk_app_id":"1:123:android:123","android_client_info":{"package_name":"com.example.mock"}},"api_key":[{"current_key":"mock"}]}]}' > "$APP_DIR/google-services.json"
-            fi
-            
-            # 3. Lint Errors के कारण बिल्ड फेल होने से रोकने के लिए कॉन्फ़िगरेशन जोड़ना
-            GRADLE_FILE="$APP_DIR/build.gradle"
-            if [ -f "$GRADLE_FILE" ]; then
-              sed -i '/android {/a \    lintOptions { checkReleaseBuilds false; abortOnError false }\n    buildFeatures { buildConfig true }' "$GRADLE_FILE"
-            fi
-          fi
-
-          # 4. लोकल स्क्रिप्ट को रन करने की परमिशन देना
-          cd "${{ steps.findroot.outputs.root }}"
-          if [ -f "gradlew" ]; then
-            chmod +x gradlew
-          fi
-
-      - name: Build Debug APK
-        working-directory: ${{ steps.findroot.outputs.root }}
-        run: |
           if [ -f "./gradlew" ]; then
-            ./gradlew clean assembleDebug --stacktrace
+            chmod +x ./gradlew
+            ./gradlew assembleDebug --stacktrace
           else
-            gradle clean :app:assembleDebug --stacktrace
+            gradle assembleDebug --stacktrace
           fi
 
-      - name: Upload Generated APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Learn-With-JKS-APK
           path: |
-            ${{ steps.findroot.outputs.root }}/app/build/outputs/apk/debug/*.apk
+            **/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+          retention-days: 14
